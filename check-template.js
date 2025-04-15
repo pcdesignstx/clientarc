@@ -1,5 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require('dotenv').config();
 
 // Firebase configuration
 const firebaseConfig = {
@@ -15,12 +17,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
 async function checkTemplate() {
   try {
     const templateId = 'Vob38nhtsXPYPv9mFNXq'; // The ID from the creation output
     const templateRef = doc(db, 'templates', templateId);
     const templateDoc = await getDoc(templateRef);
-    
+
     if (templateDoc.exists()) {
       console.log('Template found:', templateDoc.data());
     } else {

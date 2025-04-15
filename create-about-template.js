@@ -1,5 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require('dotenv').config();
 
 // Firebase configuration
 const firebaseConfig = {
@@ -15,10 +17,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
 async function createAboutTemplate() {
   try {
     console.log('Creating About Page Content template...');
-    
+
     const templateData = {
       name: "About Page Content",
       description: "Gather personal and brand-focused information to craft a strong About page.",
@@ -28,13 +32,13 @@ async function createAboutTemplate() {
           title: "Company Story",
           description: "Share your journey and values.",
           questions: [
-            { 
-              label: "When and why did you start your business?", 
+            {
+              label: "When and why did you start your business?",
               type: "long_answer",
               placeholder: "Share the story of how your business came to be..."
             },
-            { 
-              label: "What's your mission or purpose?", 
+            {
+              label: "What's your mission or purpose?",
               type: "long_answer",
               placeholder: "Describe your company's mission and purpose..."
             }
@@ -44,13 +48,13 @@ async function createAboutTemplate() {
           title: "The Team",
           description: "Introduce your key people.",
           questions: [
-            { 
-              label: "Upload team member photos", 
+            {
+              label: "Upload team member photos",
               type: "file_upload",
               placeholder: "Upload photos of your team members"
             },
-            { 
-              label: "Add names and short bios", 
+            {
+              label: "Add names and short bios",
               type: "long_answer",
               placeholder: "Write brief bios for each team member..."
             }
@@ -60,8 +64,8 @@ async function createAboutTemplate() {
           title: "Core Values",
           description: "What do you stand for?",
           questions: [
-            { 
-              label: "List 3–5 values that represent your brand", 
+            {
+              label: "List 3–5 values that represent your brand",
               type: "long_answer",
               placeholder: "List your core values, one per line..."
             }
@@ -71,8 +75,8 @@ async function createAboutTemplate() {
           title: "Why Choose Us",
           description: "Build trust and differentiation.",
           questions: [
-            { 
-              label: "What makes your company different from others?", 
+            {
+              label: "What makes your company different from others?",
               type: "long_answer",
               placeholder: "Explain what sets your company apart..."
             }
@@ -80,11 +84,11 @@ async function createAboutTemplate() {
         }
       ]
     };
-    
+
     // Add the template to the root templates collection
     const templatesRef = collection(db, 'templates');
     const docRef = await addDoc(templatesRef, templateData);
-    
+
     console.log(`About Page Content template created successfully with ID: ${docRef.id}`);
   } catch (error) {
     console.error('Error creating template:', error);

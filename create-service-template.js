@@ -1,5 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require('dotenv').config();
 
 // Firebase configuration
 const firebaseConfig = {
@@ -15,10 +17,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
 async function createServiceTemplate() {
   try {
     console.log('Creating Service Page Content template...');
-    
+
     const templateData = {
       name: "Service Page Content",
       description: "Collect content to describe one specific service in detail.",
@@ -28,13 +32,13 @@ async function createServiceTemplate() {
           title: "Service Overview",
           description: "Introduce the service and who it helps.",
           questions: [
-            { 
-              label: "What is the name of the service?", 
+            {
+              label: "What is the name of the service?",
               type: "short_answer",
               placeholder: "Enter the name of your service..."
             },
-            { 
-              label: "What does this service help people do?", 
+            {
+              label: "What does this service help people do?",
               type: "long_answer",
               placeholder: "Describe how your service helps clients..."
             }
@@ -44,13 +48,13 @@ async function createServiceTemplate() {
           title: "How It Works",
           description: "Explain your process.",
           questions: [
-            { 
-              label: "Describe the steps or workflow", 
+            {
+              label: "Describe the steps or workflow",
               type: "long_answer",
               placeholder: "Explain your service process step by step..."
             },
-            { 
-              label: "Do you have visuals or diagrams?", 
+            {
+              label: "Do you have visuals or diagrams?",
               type: "file_upload",
               placeholder: "Upload any process diagrams or visuals..."
             }
@@ -60,13 +64,13 @@ async function createServiceTemplate() {
           title: "Pricing or Packages",
           description: "Show options (if applicable).",
           questions: [
-            { 
-              label: "Describe your pricing model or packages", 
+            {
+              label: "Describe your pricing model or packages",
               type: "long_answer",
               placeholder: "Explain your pricing structure and options..."
             },
-            { 
-              label: "Upload a pricing table or flyer", 
+            {
+              label: "Upload a pricing table or flyer",
               type: "file_upload",
               placeholder: "Upload your pricing documentation..."
             }
@@ -76,8 +80,8 @@ async function createServiceTemplate() {
           title: "FAQs",
           description: "Answer common client questions.",
           questions: [
-            { 
-              label: "Add 3–5 frequently asked questions and answers", 
+            {
+              label: "Add 3–5 frequently asked questions and answers",
               type: "long_answer",
               placeholder: "List common questions and their answers, one per line..."
             }
@@ -85,11 +89,11 @@ async function createServiceTemplate() {
         }
       ]
     };
-    
+
     // Add the template to the root templates collection
     const templatesRef = collection(db, 'templates');
     const docRef = await addDoc(templatesRef, templateData);
-    
+
     console.log(`Service Page Content template created successfully with ID: ${docRef.id}`);
   } catch (error) {
     console.error('Error creating template:', error);

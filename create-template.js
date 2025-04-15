@@ -1,5 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require('dotenv').config();
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -15,10 +17,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
 async function createTemplate() {
   try {
     console.log('Creating a sample template...');
-    
+
     // Sample template data
     const templateData = {
       name: "Client Onboarding",
@@ -105,11 +109,11 @@ async function createTemplate() {
         }
       ]
     };
-    
+
     // Add the template to the root templates collection
     const templatesRef = collection(db, 'templates');
     const docRef = await addDoc(templatesRef, templateData);
-    
+
     console.log(`Template created successfully with ID: ${docRef.id}`);
   } catch (error) {
     console.error('Error creating template:', error);
