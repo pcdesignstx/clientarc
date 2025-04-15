@@ -32,6 +32,26 @@ export function AuthProvider({ children }) {
     setNavigationAttempted(false);
   }, [location.pathname]);
 
+  // Handle browser/tab close
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      if (currentUser) {
+        try {
+          await signOut(auth);
+          console.log('[Auth] User logged out due to browser/tab close');
+        } catch (error) {
+          console.error('[Auth] Error during automatic logout:', error);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentUser]);
+
   // Handle auth state changes
   useEffect(() => {
     console.log('[Auth] Setting up auth state listener');
