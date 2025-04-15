@@ -132,6 +132,7 @@ export default function AuthGuard({ children, redirectIfAuthenticated = false, a
             if (
               role === 'admin' &&
               !exemptFromOnboarding.includes(location.pathname) &&
+              !location.pathname.startsWith('/admin/') &&
               onboardingComplete === false &&
               !(role === 'admin' && process.env.NODE_ENV === 'development')
             ) {
