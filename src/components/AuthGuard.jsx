@@ -134,7 +134,9 @@ export default function AuthGuard({ children, redirectIfAuthenticated = false, a
               !exemptFromOnboarding.includes(location.pathname) &&
               !location.pathname.startsWith('/admin/') &&
               onboardingComplete === false &&
-              !(role === 'admin' && process.env.NODE_ENV === 'development')
+              !(role === 'admin' && process.env.NODE_ENV === 'development') &&
+              location.pathname !== '/login' &&
+              location.pathname !== '/signup'
             ) {
               console.log(`[${timestamp}] [AUTHGUARD] 🧭 Onboarding required for admin, redirecting`);
               if (mounted) setVerifyingWorkspace(false);
@@ -144,7 +146,9 @@ export default function AuthGuard({ children, redirectIfAuthenticated = false, a
               role === 'client' && 
               !onboardingComplete && 
               !location.pathname.startsWith('/client/') &&
-              !location.pathname.startsWith('/client-onboarding')
+              !location.pathname.startsWith('/client-onboarding') &&
+              location.pathname !== '/login' &&
+              location.pathname !== '/signup'
             ) {
               console.log(`[${timestamp}] [AUTHGUARD] 🧭 Onboarding required for client, redirecting`);
               if (mounted) setVerifyingWorkspace(false);
