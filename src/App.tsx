@@ -1,3 +1,4 @@
+import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -67,7 +68,7 @@ function AppRoutes() {
       <Route
         path="/login"
         element={
-          <AuthGuard redirectIfAuthenticated>
+          <AuthGuard redirectIfAuthenticated allowedRoles={[]}>
             <Login />
           </AuthGuard>
         }
@@ -80,7 +81,7 @@ function AppRoutes() {
       <Route
         path="/"
         element={
-          <AuthGuard>
+          <AuthGuard allowedRoles={['admin', 'client']}>
             <Navigate to="/client/dashboard" replace />
           </AuthGuard>
         }
@@ -141,7 +142,7 @@ function AppRoutes() {
       <Route
         path="/onboarding"
         element={
-          <AuthGuard>
+          <AuthGuard allowedRoles={['admin']}>
             <Onboarding />
           </AuthGuard>
         }

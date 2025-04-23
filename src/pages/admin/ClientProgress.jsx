@@ -632,7 +632,7 @@ export default function ClientProgress() {
         const newFlowInstance = {
           assignedFlowId,
           flowTemplateId: selectedFlowTemplate.id,
-          flowName: customFlowName || `${selectedFlowTemplate.title} #${flowCount + 1}`,
+          flowName: customFlowName || `${selectedFlowTemplate.name} #${flowCount + 1}`,
           assignedAt: new Date().toISOString(),
           status: 'incomplete',
           dueDate: null,
@@ -762,7 +762,7 @@ export default function ClientProgress() {
                     <option value="">Select a flow...</option>
                     {availableFlows.map((flow) => (
                       <option key={flow.id} value={flow.id}>
-                        {flow.title}
+                        {flow.name}
                       </option>
                     ))}
                   </select>

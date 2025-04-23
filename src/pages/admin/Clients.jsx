@@ -9,7 +9,7 @@ import { PencilIcon, TrashIcon, ChartBarIcon } from '@heroicons/react/24/outline
 import ConfirmModal from '../../components/ConfirmModal';
 
 export default function Clients() {
-  const { user, workspaceId } = useAuth();
+  const { currentUser, workspaceId } = useAuth();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,74 +19,106 @@ export default function Clients() {
 
   useEffect(() => {
     async function fetchClients() {
+      console.log('Starting fetchClients:', { currentUser, workspaceId });
+      
       if (!workspaceId) {
+        console.error('No workspaceId found');
         setError('No workspace found');
         setLoading(false);
         return;
       }
 
+      if (!currentUser) {
+        console.error('No currentUser found');
+        setError('Not authenticated');
+        setLoading(false);
+        return;
+      }
+
       try {
+        console.log('Fetching clients from Firestore...');
         const clientsRef = collection(db, 'workspaces', workspaceId, 'clients');
         const clientsQuery = query(clientsRef, orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(clientsQuery);
         
+        console.log('Firestore query completed, processing results...');
         const clientsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate() || new Date()
         }));
         
+        console.log('Clients data processed:', clientsData);
         setClients(clientsData);
         setError(null);
 
         // Fetch progress data for each client's flows
+        console.log('Starting to fetch progress data...');
         const progressPromises = clientsData.map(async (client) => {
-          if (!client.assignedFlows?.length) return {};
+          if (!client.assignedFlows?.length) {
+            console.log(`No flows assigned to client ${client.id}`);
+            return {};
+          }
 
+          console.log(`Processing flows for client ${client.id}:`, client.assignedFlows);
           const clientProgress = {};
           for (const flow of client.assignedFlows) {
-            const responseRef = doc(db, 'workspaces', workspaceId, 'clients', client.id, 'responses', flow.flowId);
-            const responseDoc = await getDoc(responseRef);
-            
-            let progress = 0;
-            let status = flow.status || 'not_started';
-
-            if (responseDoc.exists()) {
-              const responseData = responseDoc.data();
-              if (responseData.status) {
-                status = responseData.status;
-              }
-              if (status === 'completed') {
-                progress = 100;
-              } else {
-                const totalQuestions = flow.sections?.reduce((total, step) => total + (step.questions?.length || 0), 0) || 0;
-                const answeredQuestions = Object.entries(responseData).reduce((total, [stepId, stepResponses]) => {
-                  if (stepId === 'lastUpdated' || stepId === 'status' || stepId === 'completedAt') return total;
-                  const step = flow.sections?.find(s => s.id === stepId);
-                  const validResponses = step?.questions?.filter(q => {
-                    const response = stepResponses[q.id];
-                    return response && (
-                      (typeof response === 'string' && response.trim() !== '') ||
-                      (Array.isArray(response) && response.length > 0)
-                    );
-                  }).length || 0;
-                  return total + validResponses;
-                }, 0);
-                
-                progress = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
-              }
+            if (!flow || !flow.flowId) {
+              console.warn(`Invalid flow data for client ${client.id}:`, flow);
+              continue;
             }
 
-            clientProgress[flow.flowId] = { progress, status };
+            console.log(`Fetching progress for flow ${flow.flowId} of client ${client.id}`);
+            try {
+              const responseRef = doc(db, 'workspaces', workspaceId, 'clients', client.id, 'responses', flow.flowId);
+              const responseDoc = await getDoc(responseRef);
+              
+              let progress = 0;
+              let status = flow.status || 'not_started';
+
+              if (responseDoc.exists()) {
+                const responseData = responseDoc.data();
+                if (responseData.status) {
+                  status = responseData.status;
+                }
+                if (status === 'completed') {
+                  progress = 100;
+                } else {
+                  const totalQuestions = flow.sections?.reduce((total, step) => total + (step.questions?.length || 0), 0) || 0;
+                  const answeredQuestions = Object.entries(responseData).reduce((total, [stepId, stepResponses]) => {
+                    if (stepId === 'lastUpdated' || stepId === 'status' || stepId === 'completedAt') return total;
+                    const step = flow.sections?.find(s => s.id === stepId);
+                    const validResponses = step?.questions?.filter(q => {
+                      const response = stepResponses[q.id];
+                      return response && (
+                        (typeof response === 'string' && response.trim() !== '') ||
+                        (Array.isArray(response) && response.length > 0)
+                      );
+                    }).length || 0;
+                    return total + validResponses;
+                  }, 0);
+                  
+                  progress = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+                }
+              }
+
+              clientProgress[flow.flowId] = { progress, status };
+            } catch (error) {
+              console.error(`Error fetching progress for flow ${flow.flowId} of client ${client.id}:`, error);
+              // Continue with other flows even if one fails
+              continue;
+            }
           }
           return { [client.id]: clientProgress };
         });
 
+        console.log('Waiting for all progress data to be fetched...');
         const progressResults = await Promise.all(progressPromises);
         const combinedProgress = progressResults.reduce((acc, curr) => ({ ...acc, ...curr }), {});
+        console.log('Progress data fetched successfully:', combinedProgress);
         setProgressData(combinedProgress);
       } catch (error) {
-        console.error('Error fetching clients:', error);
+        console.error('Error in fetchClients:', error);
         setError('Failed to load clients');
         toast.error('Failed to load clients. Please try again.');
       } finally {
@@ -95,7 +127,7 @@ export default function Clients() {
     }
 
     fetchClients();
-  }, [workspaceId]);
+  }, [workspaceId, currentUser]);
 
   const handleDeleteClick = (client) => {
     setClientToDelete(client);
@@ -204,7 +236,7 @@ export default function Clients() {
                   <div>
                     <h3 className="text-lg font-medium text-gray-900 dark:text-white">{client.name}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {client.email}
+                      {client.businessName || 'No business name set'}
                     </p>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       Added {client.createdAt.toLocaleDateString()}

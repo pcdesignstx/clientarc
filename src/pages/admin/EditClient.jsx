@@ -205,16 +205,22 @@ export default function EditClient() {
       const currentData = clientDoc.data();
       const assignedFlows = currentData.assignedFlows || [];
 
+      // Remove the flow from the assignedFlows array
+      const updatedFlows = assignedFlows.filter(f => f.flowId !== flowId);
+
+      // Update Firestore with the new assignedFlows array
       await updateDoc(clientRef, {
-        assignedFlows: assignedFlows.filter(f => f.flowId !== flowId)
+        assignedFlows: updatedFlows,
+        updatedAt: serverTimestamp()
       });
 
+      // Update local state
       setClient(prev => ({
         ...prev,
-        assignedFlows: (prev.assignedFlows || []).filter(f => f.flowId !== flowId)
+        assignedFlows: updatedFlows
       }));
 
-      toast.success(`Successfully removed "${flowToRemove.flowName}" from ${client.fullName}`);
+      toast.success(`Successfully removed "${flowToRemove.name}" from ${client.fullName}`);
     } catch (error) {
       console.error('Error removing flow:', error);
       toast.error("Failed to remove flow. Please try again.");
@@ -264,7 +270,7 @@ export default function EditClient() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-8">Profile Information</h2>
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-                <div className="space-y-2">
+                <div key="fullName" className="space-y-2">
                   <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Full Name
                   </label>
@@ -278,7 +284,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="email" className="space-y-2">
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Email
                   </label>
@@ -292,7 +298,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="businessName" className="space-y-2">
                   <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Business Name
                   </label>
@@ -306,7 +312,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="phone" className="space-y-2">
                   <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Phone Number
                   </label>
@@ -320,7 +326,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="website" className="space-y-2">
                   <label htmlFor="website" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Website
                   </label>
@@ -334,7 +340,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="industry" className="space-y-2">
                   <label htmlFor="industry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Industry
                   </label>
@@ -346,39 +352,22 @@ export default function EditClient() {
                     className="block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white transition-colors duration-200"
                   >
                     <option value="">Select an industry</option>
-                    <option value="Accounting">Accounting</option>
-                    <option value="Advertising">Advertising</option>
-                    <option value="Agriculture">Agriculture</option>
-                    <option value="Architecture">Architecture</option>
-                    <option value="Automotive">Automotive</option>
-                    <option value="Banking">Banking</option>
-                    <option value="Beauty">Beauty</option>
-                    <option value="Construction">Construction</option>
-                    <option value="Consulting">Consulting</option>
-                    <option value="Dental">Dental</option>
-                    <option value="Education">Education</option>
-                    <option value="Engineering">Engineering</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Financial Services">Financial Services</option>
-                    <option value="Fitness">Fitness</option>
-                    <option value="Food & Beverage">Food & Beverage</option>
-                    <option value="Healthcare">Healthcare</option>
-                    <option value="Hospitality">Hospitality</option>
-                    <option value="Insurance">Insurance</option>
-                    <option value="Legal">Legal</option>
-                    <option value="Manufacturing">Manufacturing</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Medical">Medical</option>
-                    <option value="Non-Profit">Non-Profit</option>
-                    <option value="Real Estate">Real Estate</option>
-                    <option value="Retail">Retail</option>
-                    <option value="Technology">Technology</option>
-                    <option value="Transportation">Transportation</option>
-                    <option value="Other">Other</option>
+                    {[
+                      "Accounting", "Advertising", "Agriculture", "Architecture", "Automotive",
+                      "Banking", "Beauty", "Construction", "Consulting", "Dental", "Education",
+                      "Engineering", "Entertainment", "Financial Services", "Fitness",
+                      "Food & Beverage", "Healthcare", "Hospitality", "Insurance", "Legal",
+                      "Manufacturing", "Marketing", "Medical", "Non-Profit", "Real Estate",
+                      "Retail", "Technology", "Transportation", "Other"
+                    ].map((industry) => (
+                      <option key={industry} value={industry}>
+                        {industry}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                <div className="space-y-2">
+                <div key="businessSize" className="space-y-2">
                   <label htmlFor="businessSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Business Size
                   </label>
@@ -390,16 +379,22 @@ export default function EditClient() {
                     className="block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white transition-colors duration-200"
                   >
                     <option value="">Select a size</option>
-                    <option value="micro">Micro (1-9 employees)</option>
-                    <option value="small">Small (10-49 employees)</option>
-                    <option value="medium">Medium (50-249 employees)</option>
-                    <option value="large">Large (250+ employees)</option>
+                    {[
+                      { value: "micro", label: "Micro (1-9 employees)" },
+                      { value: "small", label: "Small (10-49 employees)" },
+                      { value: "medium", label: "Medium (50-249 employees)" },
+                      { value: "large", label: "Large (250+ employees)" }
+                    ].map((size) => (
+                      <option key={size.value} value={size.value}>
+                        {size.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-                <div className="space-y-2">
+                <div key="address" className="space-y-2">
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Address
                   </label>
@@ -413,7 +408,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="city" className="space-y-2">
                   <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     City
                   </label>
@@ -427,7 +422,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="state" className="space-y-2">
                   <label htmlFor="state" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     State
                   </label>
@@ -441,7 +436,7 @@ export default function EditClient() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div key="zipCode" className="space-y-2">
                   <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     ZIP Code
                   </label>
@@ -523,7 +518,7 @@ export default function EditClient() {
                 {client.assignedFlows.map((flow) => (
                   <div key={flow.flowId} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
-                      <p className="text-gray-900 dark:text-white font-medium">{flow.flowName}</p>
+                      <p className="text-gray-900 dark:text-white font-medium">{flow.name}</p>
                       <p className="text-xs text-gray-400">
                         Assigned on {new Date(flow.assignedAt).toLocaleDateString()}
                       </p>

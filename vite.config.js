@@ -20,9 +20,24 @@ export default defineConfig({
     historyApiFallback: true,
     watch: {
       usePolling: true
+    },
+    headers: {
+      'Content-Security-Policy': `
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval';
+        style-src 'self' 'unsafe-inline';
+        font-src 'self' data:;
+        img-src 'self' data: blob:;
+        connect-src 'self' https://*.firebaseio.com https://*.googleapis.com;
+        frame-src 'self';
+        worker-src 'self' blob:;
+      `.replace(/\s+/g, ' ').trim()
     }
   },
   optimizeDeps: {
     include: ['@heroicons/react/24/outline']
+  },
+  resolve: {
+    extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json']
   }
 })

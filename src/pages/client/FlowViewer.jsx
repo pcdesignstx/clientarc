@@ -230,8 +230,10 @@ export default function FlowViewer() {
 
     try {
       // Clean up responses before saving - remove any undefined values
-      const cleanResponses = Object.entries(responses).reduce((acc, [stepId, stepResponses]) => {
-        const cleanStepResponses = Object.entries(stepResponses).reduce((stepAcc, [fieldId, value]) => {
+      const cleanResponses = Object.entries(responses || {}).reduce((acc, [stepId, stepResponses]) => {
+        if (!stepResponses) return acc;
+        
+        const cleanStepResponses = Object.entries(stepResponses || {}).reduce((stepAcc, [fieldId, value]) => {
           if (value !== undefined && value !== null) {
             stepAcc[fieldId] = value;
           }
@@ -255,15 +257,39 @@ export default function FlowViewer() {
         completedAt: isLastStep ? serverTimestamp() : null
       }, { merge: true });
 
+      // Update client progress - only if we have valid responses
+      const currentStepResponses = cleanResponses[currentStepId] || {};
+      if (Object.keys(currentStepResponses).length > 0) {
+        const progressRef = doc(db, 'workspaces', workspaceId, 'clients', user.uid, 'progress', flowId);
+        
+        // First check if the document exists
+        const progressDoc = await getDoc(progressRef);
+        if (!progressDoc.exists()) {
+          // Create the document if it doesn't exist
+          await setDoc(progressRef, {
+            steps: {},
+            lastUpdated: serverTimestamp()
+          });
+        }
+        
+        // Now update the document
+        await updateDoc(progressRef, {
+          [`steps.${currentStepId}.responses`]: currentStepResponses,
+          [`steps.${currentStepId}.completed`]: true,
+          [`steps.${currentStepId}.completedAt`]: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        });
+      }
+
       // Calculate progress
       const totalQuestions = flow.steps.reduce((total, step) => total + (step.questions?.length || 0), 0);
-      const answeredQuestions = Object.entries(cleanResponses).reduce((total, [stepId, stepResponses]) => {
-        const step = flow.steps.find(s => s.id === stepId);
+      const answeredQuestions = Object.entries(currentStepResponses).reduce((total, [questionId, response]) => {
+        const step = flow.steps.find(s => s.id === questionId);
         const validResponses = step?.questions?.filter(q => {
-          const response = stepResponses[q.id];
-          return response && (
-            (typeof response === 'string' && response.trim() !== '') ||
-            (Array.isArray(response) && response.length > 0)
+          const stepResponse = currentStepResponses[q.id];
+          return stepResponse && (
+            (typeof stepResponse === 'string' && stepResponse.trim() !== '') ||
+            (Array.isArray(stepResponse) && stepResponse.length > 0)
           );
         }).length || 0;
         return total + validResponses;
@@ -284,7 +310,7 @@ export default function FlowViewer() {
           const updatedFlows = [...assignedFlows];
           updatedFlows[flowIndex] = {
             ...assignedFlows[flowIndex],
-            progress: isLastStep ? 100 : progress,
+            progress: progress,
             status: isLastStep ? 'completed' : 'in_progress',
             lastUpdated: new Date().toISOString(),
             completedAt: isLastStep ? new Date().toISOString() : null
@@ -355,6 +381,9 @@ export default function FlowViewer() {
   };
 
   const renderQuestion = (question, index) => {
+    // Get the question text, handling both string and object formats
+    const questionText = typeof question.text === 'string' ? question.text : question.text?.text || '';
+
     switch (question.type) {
       case 'short_answer':
         return (
@@ -383,27 +412,37 @@ export default function FlowViewer() {
             onChange={(e) => handleResponseChange(step.id, question.id, e.target.value)}
           >
             <option value="">Select an option</option>
-            {question.options?.map((option, i) => (
-              <option key={i} value={option}>{option}</option>
-            ))}
+            {question.options?.map((option, i) => {
+              // Handle both string and object options
+              const optionValue = typeof option === 'string' ? option : option.value || option.text || '';
+              const optionLabel = typeof option === 'string' ? option : option.label || option.text || optionValue;
+              return (
+                <option key={i} value={optionValue}>{optionLabel}</option>
+              );
+            })}
           </select>
         );
       case 'multiple_choice':
         return (
           <div className="space-y-2">
-            {question.options?.map((option, i) => (
-              <label key={i} className="flex items-center">
-                <input
-                  type="radio"
-                  name={`question-${index}`}
-                  value={option}
-                  checked={responses[step.id]?.[question.id] === option}
-                  onChange={(e) => handleResponseChange(step.id, question.id, e.target.value)}
-                  className="mr-2"
-                />
-                {option}
-              </label>
-            ))}
+            {question.options?.map((option, i) => {
+              // Handle both string and object options
+              const optionValue = typeof option === 'string' ? option : option.value || option.text || '';
+              const optionLabel = typeof option === 'string' ? option : option.label || option.text || optionValue;
+              return (
+                <label key={i} className="flex items-center">
+                  <input
+                    type="radio"
+                    name={`question-${index}`}
+                    value={optionValue}
+                    checked={responses[step.id]?.[question.id] === optionValue}
+                    onChange={(e) => handleResponseChange(step.id, question.id, e.target.value)}
+                    className="mr-2"
+                  />
+                  {optionLabel}
+                </label>
+              );
+            })}
           </div>
         );
       case 'yes_no':
@@ -425,8 +464,8 @@ export default function FlowViewer() {
                 type="radio"
                 name={`question-${index}`}
                 value="No"
-                checked={question.answer === 'No'}
-                onChange={(e) => handleResponseChange(question.id, question.id, e.target.value)}
+                checked={responses[step.id]?.[question.id] === 'No'}
+                onChange={(e) => handleResponseChange(step.id, question.id, e.target.value)}
                 className="mr-2"
               />
               No
@@ -438,12 +477,12 @@ export default function FlowViewer() {
           <div className="space-y-2">
             <input
               type="file"
-              onChange={(e) => handleFileUpload(question.id, question.id, Array.from(e.target.files))}
+              onChange={(e) => handleFileUpload(step.id, question.id, Array.from(e.target.files))}
               className="w-full"
             />
-            {question.answer && (
+            {responses[step.id]?.[question.id] && (
               <div className="mt-2">
-                <p className="text-sm text-gray-600">Uploaded: {question.answer}</p>
+                <p className="text-sm text-gray-600">Uploaded: {responses[step.id][question.id]}</p>
               </div>
             )}
           </div>
@@ -455,23 +494,13 @@ export default function FlowViewer() {
             <input
               type="color"
               value={colorValue}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                if (newValue) {
-                  handleResponseChange(step.id, question.id, newValue);
-                }
-              }}
+              onChange={(e) => handleResponseChange(step.id, question.id, e.target.value)}
               className="h-10 w-20"
             />
             <input
               type="text"
               value={colorValue}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                if (newValue) {
-                  handleResponseChange(step.id, question.id, newValue);
-                }
-              }}
+              onChange={(e) => handleResponseChange(step.id, question.id, e.target.value)}
               placeholder="#000000"
               className="px-3 py-2 border rounded"
             />
