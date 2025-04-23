@@ -13,6 +13,16 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+// Debug Firebase configuration
+console.log('Firebase Config:', {
+  apiKey: firebaseConfig.apiKey ? 'Present' : 'Missing',
+  authDomain: firebaseConfig.authDomain ? 'Present' : 'Missing',
+  projectId: firebaseConfig.projectId ? 'Present' : 'Missing',
+  storageBucket: firebaseConfig.storageBucket ? 'Present' : 'Missing',
+  messagingSenderId: firebaseConfig.messagingSenderId ? 'Present' : 'Missing',
+  appId: firebaseConfig.appId ? 'Present' : 'Missing'
+});
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
