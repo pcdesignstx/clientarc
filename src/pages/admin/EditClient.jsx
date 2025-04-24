@@ -4,7 +4,8 @@ import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, onSnapsho
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, XMarkIcon, KeyIcon } from '@heroicons/react/24/outline';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 export default function EditClient() {
   const { clientId } = useParams();
@@ -30,6 +31,8 @@ export default function EditClient() {
     zipCode: '',
     notes: ''
   });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [regeneratingApiKey, setRegeneratingApiKey] = useState(false);
 
   useEffect(() => {
     const fetchClient = async () => {
@@ -41,7 +44,13 @@ export default function EditClient() {
         
         if (clientDoc.exists()) {
           const data = clientDoc.data();
-          setClient({ id: clientDoc.id, ...data });
+          setClient({ 
+            id: clientDoc.id, 
+            apiKey: data.apiKey,
+            fullName: data.fullName,
+            assignedFlows: data.assignedFlows || [],
+            ...data 
+          });
           setFormData({
             fullName: data.fullName || '',
             email: data.email || '',
@@ -227,6 +236,35 @@ export default function EditClient() {
     }
   };
 
+  const handleRegenerateApiKey = async () => {
+    if (!workspaceId || !clientId) return;
+
+    setRegeneratingApiKey(true);
+    try {
+      // Initialize Firebase Functions with the correct region
+      const functions = getFunctions();
+      const regenerateApiKey = httpsCallable(functions, 'regenerateApiKey');
+      
+      const result = await regenerateApiKey({
+        workspaceId,
+        clientId
+      });
+
+      if (result.data.apiKey) {
+        setClient(prev => ({
+          ...prev,
+          apiKey: result.data.apiKey
+        }));
+        toast.success('API key regenerated successfully');
+      }
+    } catch (error) {
+      console.error('Error regenerating API key:', error);
+      toast.error('Failed to regenerate API key');
+    } finally {
+      setRegeneratingApiKey(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -268,6 +306,49 @@ export default function EditClient() {
         <div className="lg:col-span-2">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-8">Profile Information</h2>
+
+            {/* API Key Section */}
+            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg mb-8">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-md font-medium text-gray-900 dark:text-white flex items-center">
+                  <KeyIcon className="h-5 w-5 mr-2" />
+                  API Key
+                </h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    {showApiKey ? 'Hide' : 'Show'}
+                  </button>
+                  <button
+                    onClick={handleRegenerateApiKey}
+                    disabled={regeneratingApiKey}
+                    className="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 flex items-center"
+                  >
+                    {regeneratingApiKey ? (
+                      <ArrowPathIcon className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <ArrowPathIcon className="h-4 w-4 mr-1" />
+                    )}
+                    Regenerate
+                  </button>
+                </div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-600">
+                {showApiKey ? (
+                  <code className="text-sm font-mono break-all">{client.apiKey}</code>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    ••••••••••••••••••••••••••••••••
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Use this API key to authenticate API requests for this client.
+              </p>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
                 <div key="fullName" className="space-y-2">

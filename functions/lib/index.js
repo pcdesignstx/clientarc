@@ -25,102 +25,108 @@ var __importStar = (this && this.__importStar) || function (mod) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendReminderEmail = void 0;
-const admin = __importStar(require("firebase-admin"));
+exports.sendReminderEmail = exports.regenerateApiKey = void 0;
 const functions = __importStar(require("firebase-functions"));
-const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
+const admin = __importStar(require("firebase-admin"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
+const crypto = __importStar(require("crypto"));
+// Initialize Firebase Admin
 admin.initializeApp();
-const app = (0, express_1.default)();
-app.use((0, cors_1.default)({ origin: true }));
-app.use(express_1.default.json());
-const API_KEY = ((_a = functions.config().mailgun) === null || _a === void 0 ? void 0 : _a.api_key) || process.env.MAILGUN_API_KEY;
-const DOMAIN = ((_b = functions.config().mailgun) === null || _b === void 0 ? void 0 : _b.domain) || process.env.MAILGUN_DOMAIN || 'clientarc.pcdesignstx.com';
-app.post('/', async (req, res) => {
+// Export the regenerateApiKey function
+exports.regenerateApiKey = functions.https.onCall(async (data, context) => {
+    // Verify that the user is authenticated
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
     try {
-        const { clientEmail, clientName, flowName, dueDate, workspaceId, clientId, flowId, } = req.body;
-        if (!clientEmail || !clientName || !flowName || !workspaceId || !clientId || !flowId) {
-            return res.status(400).json({ error: 'Missing required fields' });
+        const { workspaceId, clientId } = data;
+        if (!workspaceId || !clientId) {
+            throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
         }
-        const formattedDueDate = dueDate
-            ? new Date(dueDate).toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            })
-            : null;
-        const portalUrl = `https://clientarc.pcdesignstx.com/client-portal/${workspaceId}/${clientId}/${flowId}`;
-        const htmlContent = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">Hi ${clientName},</h2>
-        <p>This is a friendly reminder about your assigned flow: <strong>${flowName}</strong>.</p>
-        ${formattedDueDate ? `<p>The flow is due on: <strong>${formattedDueDate}</strong></p>` : ''}
-        <p>You can access and complete your flow by visiting your client portal:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${portalUrl}"
-             style="background-color: #2563eb; color: white; padding: 12px 24px; 
-             text-decoration: none; border-radius: 6px; display: inline-block;">
-            Access Your Flow
-          </a>
-        </div>
-        <p>If you have any questions or need assistance, please don't hesitate to reach out.</p>
-        <p>Best regards,<br>The ClientArc Team</p>
-      </div>
-    `;
-        const auth = Buffer.from(`api:${API_KEY}`).toString('base64');
-        console.log('Attempting to send email with Mailgun...');
-        console.log('Using domain:', DOMAIN);
-        console.log('API Endpoint:', `https://api.mailgun.net/v3/${DOMAIN}/messages`);
-        console.log('From:', `ClientArc <noreply@${DOMAIN}>`);
-        console.log('To:', clientEmail);
-        console.log('Subject:', `Reminder: Complete your ${flowName} flow`);
+        // Verify the request is from an admin
+        const adminDoc = await admin.firestore()
+            .collection('users')
+            .doc(context.auth.uid)
+            .get();
+        if (!adminDoc.exists || adminDoc.data()?.role !== 'admin') {
+            throw new functions.https.HttpsError('permission-denied', 'Only admins can regenerate API keys');
+        }
+        // Generate new API key
+        const newApiKey = crypto.randomBytes(32).toString('hex');
+        // Update client document with new API key
+        const clientRef = admin.firestore()
+            .collection('workspaces')
+            .doc(workspaceId)
+            .collection('clients')
+            .doc(clientId);
+        await clientRef.update({
+            apiKey: newApiKey,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return {
+            apiKey: newApiKey,
+            message: 'API key regenerated successfully'
+        };
+    }
+    catch (error) {
+        console.error('Error regenerating API key:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to regenerate API key');
+    }
+});
+// Mailgun configuration
+const API_KEY = process.env.MAILGUN_API_KEY;
+const DOMAIN = process.env.MAILGUN_DOMAIN || 'clientarc.pcdesignstx.com';
+// Export the sendReminderEmail function
+exports.sendReminderEmail = functions.https.onRequest(async (req, res) => {
+    try {
+        const { clientId, flowId, questionId } = req.body;
+        if (!clientId || !flowId || !questionId) {
+            res.status(400).json({ error: 'Missing required parameters' });
+            return;
+        }
+        // Get client and flow data from Firestore
+        const clientDoc = await admin.firestore().collection('clients').doc(clientId).get();
+        const flowDoc = await admin.firestore().collection('flows').doc(flowId).get();
+        if (!clientDoc.exists || !flowDoc.exists) {
+            res.status(404).json({ error: 'Client or flow not found' });
+            return;
+        }
+        const client = clientDoc.data();
+        const flow = flowDoc.data();
+        if (!client || !flow) {
+            res.status(404).json({ error: 'Client or flow data not found' });
+            return;
+        }
+        // Find the question in the flow
+        const question = flow.questions.find((q) => q.id === questionId);
+        if (!question) {
+            res.status(404).json({ error: 'Question not found' });
+            return;
+        }
+        // Send email using Mailgun
         const response = await (0, node_fetch_1.default)(`https://api.mailgun.net/v3/${DOMAIN}/messages`, {
             method: 'POST',
             headers: {
-                Authorization: `Basic ${auth}`,
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': `Basic ${Buffer.from(`api:${API_KEY}`).toString('base64')}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
             },
             body: new URLSearchParams({
-                from: `ClientArc <noreply@${DOMAIN}>`,
-                to: clientEmail,
-                subject: `Reminder: Complete your ${flowName} flow`,
-                html: htmlContent,
-            }),
+                from: 'ClientArc <noreply@clientarc.pcdesignstx.com>',
+                to: client.email,
+                subject: `Reminder: ${question.text}`,
+                text: 'This is a reminder to complete the question: ' + question.text + '\n\n' +
+                    'Please log in to your ClientArc dashboard to complete this question.'
+            })
         });
-        const data = await response.json();
         if (!response.ok) {
-            console.error('Mailgun API Error:', data);
-            return res.status(500).json({
-                error: 'Mailgun API Error',
-                details: data,
-            });
+            throw new Error(`Mailgun API error: ${response.statusText}`);
         }
-        console.log('Mailgun Success:', data);
-        return res.status(200).json({ success: true, message: 'Reminder sent!' });
+        res.status(200).json({ message: 'Reminder email sent successfully' });
     }
     catch (error) {
-        const err = error;
-        console.error('Function Error:', {
-            message: err.message,
-            stack: err.stack
-        });
-        return res.status(500).json({
-            error: 'Internal server error',
-            message: err.message,
-        });
+        console.error('Error sending reminder email:', error);
+        res.status(500).json({ error: 'Failed to send reminder email' });
     }
 });
-// Only start the server when running locally
-if (process.env.NODE_ENV !== 'production') {
-    const PORT = process.env.PORT || 8080;
-    app.listen(PORT, () => {
-        console.log(`Listening on port ${PORT}`);
-    });
-}
-// Export the Express app for Cloud Functions
-exports.sendReminderEmail = functions.https.onRequest(app);
 //# sourceMappingURL=index.js.map

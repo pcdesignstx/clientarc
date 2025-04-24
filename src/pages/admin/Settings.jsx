@@ -26,7 +26,7 @@ const TABS = [
   { id: 'workspace', label: 'Workspace' },
   { id: 'security', label: 'Security' },
   { id: 'notifications', label: 'Notifications' },
-  { id: 'management', label: 'Management' },
+  { id: 'management', label: 'Management', ownerOnly: true },
 ];
 
 export default function Settings() {
@@ -67,8 +67,25 @@ export default function Settings() {
         // Fetch workspace data
         const workspaceDoc = await getDoc(doc(db, 'workspaces', workspaceId));
         const workspaceData = workspaceDoc.data();
-        setWorkspaceData(workspaceData);
+        
+        // Debug logging
+        console.log('Current User ID:', currentUser.uid);
+        console.log('Workspace ID:', workspaceId);
+        console.log('Full Workspace Data:', workspaceData);
+        console.log('Workspace Owner ID:', workspaceData?.ownerId);
+        console.log('Is Owner:', currentUser.uid === workspaceData?.ownerId);
 
+        // If workspace exists but has no owner, set current user as owner
+        if (workspaceData && !workspaceData.ownerId) {
+          console.log('Setting workspace owner...');
+          await updateDoc(doc(db, 'workspaces', workspaceId), {
+            ownerId: currentUser.uid
+          });
+          workspaceData.ownerId = currentUser.uid;
+        }
+
+        setWorkspaceData(workspaceData);
+        
         setSettings(prev => ({
           ...prev,
           workspaceName: workspaceData?.name || '',
@@ -454,9 +471,24 @@ export default function Settings() {
   );
 
   const renderManagementTab = () => (
-    workspaceData?.ownerId === currentUser.uid && (
+    <div className="space-y-6">
       <Card>
-        <div className="space-y-6">
+        <h3 className="text-lg font-medium text-gray-900">WordPress Integration</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Download the WordPress plugin to integrate your ClientArc content with your WordPress site.
+        </p>
+        <div className="mt-4">
+          <a
+            href="/clientarc-plugin.zip"
+            download
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded hover:bg-blue-700"
+          >
+            Download WordPress Plugin
+          </a>
+        </div>
+      </Card>
+      {workspaceData?.ownerId === currentUser.uid && (
+        <Card>
           <div className="space-y-4">
             <div>
               <h3 className="text-xl font-bold text-red-600 dark:text-red-500">
@@ -473,9 +505,9 @@ export default function Settings() {
               </div>
             </div>
           </div>
-        </div>
-      </Card>
-    )
+        </Card>
+      )}
+    </div>
   );
 
   return (
@@ -485,7 +517,7 @@ export default function Settings() {
         <nav className="-mb-px flex space-x-8" aria-label="Settings tabs">
           {TABS.map((tab) => {
             // Only show Management tab for workspace owners
-            if (tab.id === 'management' && workspaceData?.ownerId !== currentUser.uid) {
+            if (tab.ownerOnly && workspaceData?.ownerId !== currentUser?.uid) {
               return null;
             }
             
@@ -513,7 +545,7 @@ export default function Settings() {
         {activeTab === 'workspace' && renderWorkspaceTab()}
         {activeTab === 'security' && renderSecurityTab()}
         {activeTab === 'notifications' && renderNotificationsTab()}
-        {activeTab === 'management' && renderManagementTab()}
+        {activeTab === 'management' && workspaceData?.ownerId === currentUser?.uid && renderManagementTab()}
 
         {/* Sign Out Button - Always visible */}
         <div className="flex justify-end pt-4">

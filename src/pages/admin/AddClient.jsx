@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, query, getDocs, serverTimestamp } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword, fetchSignInMethodsForEmail } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import Card from '../../components/Card';
+import crypto from 'crypto';
 
 export default function AddClient() {
   const navigate = useNavigate();
@@ -103,22 +104,59 @@ export default function AddClient() {
     console.log('[AddClient] Form validated, proceeding with client creation');
     
     try {
-      console.log('[AddClient] Creating Firebase Auth user');
-      // Create Firebase Auth user
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
-      );
-      const clientUser = userCredential.user;
-      console.log('[AddClient] Firebase Auth user created:', { uid: clientUser.uid, email: clientUser.email });
+      // First check if the email is already in use
+      console.log('[AddClient] Checking if email exists');
+      const signInMethods = await fetchSignInMethodsForEmail(auth, formData.email);
+      let clientUser;
 
-      // Send password reset email if sendInvite is checked
-      if (formData.sendInvite) {
-        console.log('[AddClient] Sending password reset email');
-        await sendPasswordResetEmail(auth, formData.email);
-        console.log('[AddClient] Password reset email sent');
+      if (signInMethods.length > 0) {
+        console.log('[AddClient] Email already exists, checking workspace');
+        // Check if client already exists in this workspace
+        const clientsRef = collection(db, 'workspaces', workspaceId, 'clients');
+        const q = query(clientsRef);
+        const snapshot = await getDocs(q);
+        const existingClient = snapshot.docs.find(doc => doc.data().email === formData.email);
+
+        if (existingClient) {
+          toast.error('This client already exists in your workspace');
+          setLoading(false);
+          return;
+        }
+
+        // Get the user's UID by querying all workspaces' clients
+        const allClientsQuery = query(collection(db, 'users'));
+        const allClientsSnapshot = await getDocs(allClientsQuery);
+        const existingUser = allClientsSnapshot.docs.find(doc => doc.data().email === formData.email);
+
+        if (!existingUser) {
+          toast.error('Error finding user details. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        clientUser = { uid: existingUser.id, email: formData.email };
+        console.log('[AddClient] Found existing user:', clientUser);
+      } else {
+        console.log('[AddClient] Creating Firebase Auth user');
+        // Create Firebase Auth user
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          formData.email,
+          Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+        );
+        clientUser = userCredential.user;
+        console.log('[AddClient] Firebase Auth user created:', { uid: clientUser.uid, email: clientUser.email });
+
+        // Send password reset email if sendInvite is checked
+        if (formData.sendInvite) {
+          console.log('[AddClient] Sending password reset email');
+          await sendPasswordResetEmail(auth, formData.email);
+          console.log('[AddClient] Password reset email sent');
+        }
       }
+
+      // Generate API key
+      const apiKey = crypto.randomBytes(32).toString('hex');
 
       // Save client data to Firestore
       console.log('[AddClient] Preparing client data for Firestore');
@@ -135,7 +173,8 @@ export default function AddClient() {
         addedBy: currentUser.uid,
         role: 'client',
         workspaceId,
-        uid: clientUser.uid
+        uid: clientUser.uid,
+        apiKey: apiKey
       };
       console.log('[AddClient] Client data prepared:', clientData);
 

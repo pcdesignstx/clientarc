@@ -28,7 +28,7 @@ export default defineConfig({
         style-src 'self' 'unsafe-inline';
         font-src 'self' data:;
         img-src 'self' data: blob:;
-        connect-src 'self' https://*.firebaseio.com https://*.googleapis.com;
+        connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.cloudfunctions.net;
         frame-src 'self';
         worker-src 'self' blob:;
       `.replace(/\s+/g, ' ').trim()
